@@ -1,0 +1,14 @@
+.databricks/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/agent-memory/
+CLAUDE.local.md
+*.local.sh
+*.local.yml
+build/
+dist/
+__pycache__/
+*.egg-info
+.venv/
+scratch/**
+!scratch/README.md

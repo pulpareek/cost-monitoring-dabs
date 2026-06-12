@@ -1,0 +1,1192 @@
+# Cost Monitoring Alerts - Databricks Asset Bundle
+#
+# Uses native SQL Alerts V2 (DAB v0.279.0+) for cost monitoring.
+# Schema validated against official Databricks documentation.
+
+resources:
+  alerts:
+    # ============================================
+    # AI/Model Serving Cost Alert
+    # ============================================
+    ai_cost_alert:
+      display_name: "Cost Alert - AI Model Serving"
+      custom_summary: &alert_subject "[Databricks Cost Alert] {{ALERT_NAME}} ({{ALERT_STATUS}})"
+      custom_description: &alert_email_body |
+        <h2>Databricks Cost Alert</h2>
+        <p><b>{{ALERT_NAME}}</b> changed status to <b>{{ALERT_STATUS}}</b>.</p>
+        <table>
+          <tbody>
+            <tr><th>Metric</th><td>{{ALERT_COLUMN}}</td></tr>
+            <tr><th>Current value</th><td>{{QUERY_RESULT_VALUE}}</td></tr>
+            <tr><th>Condition</th><td>{{ALERT_CONDITION}} {{ALERT_THRESHOLD}}</td></tr>
+            <tr><th>Status</th><td>{{ALERT_STATUS}}</td></tr>
+          </tbody>
+        </table>
+        <h3>Result details</h3>
+        {{QUERY_RESULT_TABLE}}
+        <hr>
+        <p><a href="{{ALERT_URL}}" target="_blank">View this alert in Databricks</a></p>
+        <p><i>Automated message from the cost-monitoring Databricks Asset Bundle. Thresholds are configured per environment.</i></p>
+
+      query_text: |
+        SELECT
+          COALESCE(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 0) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND u.billing_origin_product = 'MODEL_SERVING'
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.ai_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 13 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # Job Compute Cost Alert
+    # ============================================
+    job_cost_alert:
+      display_name: "Cost Alert - Job Compute"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        SELECT
+          COALESCE(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 0) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND u.billing_origin_product = 'JOBS'
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.job_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 13 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # SQL Warehouse Cost Alert
+    # ============================================
+    warehouse_cost_alert:
+      display_name: "Cost Alert - SQL Warehouses"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        SELECT
+          COALESCE(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 0) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND u.billing_origin_product = 'SQL'
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.warehouse_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 13 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # Serverless Compute Cost Alert
+    # ============================================
+    serverless_cost_alert:
+      display_name: "Cost Alert - Serverless Compute"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        SELECT
+          COALESCE(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 0) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND u.product_features.is_serverless = true
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.serverless_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 13 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # Total Platform Cost Alert + Breakdown
+    # ============================================
+    total_cost_alert:
+      display_name: "Cost Alert - Total Platform"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      # Includes breakdown by product for immediate context in alert
+      query_text: |
+        WITH per_product AS (
+          SELECT
+            u.billing_origin_product,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          GROUP BY u.billing_origin_product
+        )
+        SELECT
+          COALESCE(SUM(cost), 0) AS total_cost,
+          COALESCE(CONCAT_WS(', ', COLLECT_LIST(CONCAT(billing_origin_product, ': $', ROUND(cost, 0)))), 'None') AS breakdown
+        FROM per_product
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: total_cost
+        threshold:
+          value:
+            double_value: ${var.total_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      # Runs twice daily (1 PM and 7 PM UTC)
+      schedule:
+        quartz_cron_schedule: "0 0 13,19 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # DLT Pipeline Cost Alert (COST-006)
+    # ============================================
+    dlt_cost_alert:
+      display_name: "Cost Alert - DLT Pipelines"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        SELECT
+          COALESCE(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 0) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND (u.billing_origin_product IN ('DLT', 'LAKEFLOW_CONNECT')
+               OR (u.billing_origin_product = 'SQL' AND u.usage_metadata.dlt_pipeline_id IS NOT NULL))
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.dlt_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 13 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # Interactive Cluster Cost Alert (COST-007)
+    # ============================================
+    interactive_cost_alert:
+      display_name: "Cost Alert - Interactive Clusters"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      # Interactive clusters = ALL_PURPOSE compute without job_id
+      query_text: |
+        SELECT
+          COALESCE(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 0) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND u.billing_origin_product = 'ALL_PURPOSE'
+          AND u.usage_metadata.job_id IS NULL
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.interactive_daily_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 13 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # Cost Anomaly Detection (Z-Score > 2)
+    cost_anomaly_alert:
+      display_name: "Cost Alert - Anomaly Detection"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      # Z-score calculation with safety valves:
+      # 1. Excludes target day from baseline stats
+      # 2. Ignores trivial costs < $50 to prevent noise
+      # 3. Handles zero std_dev gracefully
+      query_text: |
+        WITH daily_agg AS (
+          SELECT
+            u.usage_date,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.usage_date >= DATE_SUB(CURRENT_DATE(), 31)
+          GROUP BY u.usage_date
+        ),
+        stats AS (
+          SELECT
+            AVG(cost) AS mean_cost,
+            STDDEV(cost) AS std_dev
+          FROM daily_agg
+          WHERE usage_date < DATE_SUB(CURRENT_DATE(), 1)
+        ),
+        target AS (
+          SELECT cost AS yesterday_cost
+          FROM daily_agg
+          WHERE usage_date = DATE_SUB(CURRENT_DATE(), 1)
+        )
+        SELECT
+          ROUND(t.yesterday_cost, 2) AS yesterday_cost,
+          ROUND(s.mean_cost, 2) AS avg_30d_cost,
+          ROUND(
+            CASE
+              WHEN s.std_dev = 0 OR s.std_dev IS NULL THEN 0
+              ELSE (t.yesterday_cost - s.mean_cost) / s.std_dev
+            END, 2
+          ) AS z_score
+        FROM stats s
+        CROSS JOIN target t
+        WHERE t.yesterday_cost > 50
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: z_score
+        threshold:
+          value:
+            double_value: 2.0
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      # Run at 2 PM UTC (slightly later to ensure data arrival)
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # GROWTH DETECTION ALERTS
+    # ============================================
+
+    # Week-over-Week Cost Growth (GROWTH-001)
+    # ============================================
+    wow_growth_alert:
+      display_name: "Cost Alert - Week-over-Week Growth"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH weekly_cost AS (
+          SELECT
+            DATE_SUB(TO_DATE(u.usage_start_time), DAYOFWEEK(TO_DATE(u.usage_start_time))) AS week_start,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost,
+            COUNT(DISTINCT TO_DATE(u.usage_start_time)) AS days
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.usage_date >= DATE_SUB(CURRENT_DATE(), 21)
+          GROUP BY ALL
+          HAVING days = 7
+        ),
+        growth AS (
+          SELECT
+            week_start,
+            list_cost,
+            LAG(list_cost, 1) OVER (ORDER BY week_start) AS prev_week_cost,
+            ROUND(100 * (list_cost - LAG(list_cost, 1) OVER (ORDER BY week_start))
+                  / NULLIF(LAG(list_cost, 1) OVER (ORDER BY week_start), 0), 2) AS wow_growth_pct
+          FROM weekly_cost
+        )
+        SELECT
+          week_start,
+          ROUND(list_cost, 2) AS current_week_cost,
+          ROUND(prev_week_cost, 2) AS previous_week_cost,
+          COALESCE(wow_growth_pct, 0) AS wow_growth_pct
+        FROM growth
+        WHERE week_start = (SELECT MAX(week_start) FROM growth)
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: wow_growth_pct
+        threshold:
+          value:
+            double_value: ${var.wow_growth_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      # Run weekly on Monday at 2 PM UTC
+      schedule:
+        quartz_cron_schedule: "0 0 14 ? * MON"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # 30-Day Rolling Growth (GROWTH-002)
+    # ============================================
+    monthly_growth_alert:
+      display_name: "Cost Alert - 30 Day Rolling Growth"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH period_costs AS (
+          SELECT
+            SUM(CASE WHEN u.usage_date BETWEEN DATE_ADD(CURRENT_DATE(), -30) AND DATE_ADD(CURRENT_DATE(), -1)
+                THEN u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0) ELSE 0 END) AS last_30_day_spend,
+            SUM(CASE WHEN u.usage_date BETWEEN DATE_ADD(CURRENT_DATE(), -60) AND DATE_ADD(CURRENT_DATE(), -31)
+                THEN u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0) ELSE 0 END) AS prev_30_day_spend
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.usage_date >= DATE_ADD(CURRENT_DATE(), -60)
+        )
+        SELECT
+          ROUND(last_30_day_spend, 2) AS last_30_day_spend,
+          ROUND(prev_30_day_spend, 2) AS prev_30_day_spend,
+          ROUND(TRY_DIVIDE((last_30_day_spend - prev_30_day_spend), prev_30_day_spend) * 100, 2) AS growth_pct
+        FROM period_costs
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: growth_pct
+        threshold:
+          value:
+            double_value: ${var.monthly_growth_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      # Run weekly on Monday
+      schedule:
+        quartz_cron_schedule: "0 0 14 ? * MON"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # JOB COST ALERTS
+    # ============================================
+
+    # Most Expensive Job - 30 Days (JOB-001)
+    # ============================================
+    expensive_job_alert:
+      display_name: "Cost Alert - Expensive Job (30 days)"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH list_cost_per_job AS (
+          SELECT
+            u.workspace_id,
+            u.usage_metadata.job_id AS job_id,
+            COUNT(DISTINCT u.usage_metadata.job_run_id) AS runs,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost,
+            FIRST(u.identity_metadata.run_as, TRUE) AS run_as,
+            MAX(u.usage_end_time) AS last_seen
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'JOBS'
+            AND u.usage_metadata.job_id IS NOT NULL
+            AND u.usage_date >= DATE_SUB(CURRENT_DATE(), 30)
+          GROUP BY u.workspace_id, u.usage_metadata.job_id
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        )
+        SELECT
+          COALESCE(t2.name, CAST(t1.job_id AS STRING)) AS job_name,
+          t1.job_id,
+          t1.runs,
+          t1.run_as,
+          ROUND(t1.list_cost, 2) AS list_cost
+        FROM list_cost_per_job t1
+        LEFT JOIN most_recent_jobs t2 USING (workspace_id, job_id)
+        ORDER BY list_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: list_cost
+        threshold:
+          value:
+            double_value: ${var.expensive_job_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # Most Expensive Job Run (JOB-002)
+    # ============================================
+    expensive_job_run_alert:
+      display_name: "Cost Alert - Expensive Job Run"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH list_cost_per_run AS (
+          SELECT
+            u.workspace_id,
+            u.usage_metadata.job_id AS job_id,
+            u.usage_metadata.job_run_id AS run_id,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost,
+            FIRST(u.identity_metadata.run_as, TRUE) AS run_as,
+            MAX(u.usage_end_time) AS run_end_time
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'JOBS'
+            AND u.usage_metadata.job_id IS NOT NULL
+            AND u.usage_metadata.job_run_id IS NOT NULL
+            AND u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          GROUP BY u.workspace_id, u.usage_metadata.job_id, u.usage_metadata.job_run_id
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        )
+        SELECT
+          COALESCE(t2.name, CAST(t1.job_id AS STRING)) AS job_name,
+          t1.job_id,
+          t1.run_id,
+          t1.run_as,
+          ROUND(t1.list_cost, 2) AS list_cost
+        FROM list_cost_per_run t1
+        LEFT JOIN most_recent_jobs t2 USING (workspace_id, job_id)
+        ORDER BY list_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: list_cost
+        threshold:
+          value:
+            double_value: ${var.expensive_job_run_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # Job 7-Day Cost Growth (JOB-003)
+    # ============================================
+    job_growth_alert:
+      display_name: "Cost Alert - Job Cost Growth"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH job_period_cost AS (
+          SELECT
+            u.workspace_id,
+            u.usage_metadata.job_id AS job_id,
+            SUM(CASE WHEN u.usage_date BETWEEN DATE_ADD(CURRENT_DATE(), -7) AND DATE_ADD(CURRENT_DATE(), -1)
+                THEN u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0) ELSE 0 END) AS last_7_day_spend,
+            SUM(CASE WHEN u.usage_date BETWEEN DATE_ADD(CURRENT_DATE(), -14) AND DATE_ADD(CURRENT_DATE(), -8)
+                THEN u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0) ELSE 0 END) AS prev_7_day_spend
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'JOBS'
+            AND u.usage_metadata.job_id IS NOT NULL
+            AND u.usage_date >= DATE_ADD(CURRENT_DATE(), -14)
+          GROUP BY u.workspace_id, u.usage_metadata.job_id
+          HAVING last_7_day_spend > 100
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        )
+        SELECT
+          COALESCE(t2.name, CAST(t1.job_id AS STRING)) AS job_name,
+          t1.job_id,
+          ROUND(t1.last_7_day_spend, 2) AS last_7_day_spend,
+          ROUND(t1.prev_7_day_spend, 2) AS prev_7_day_spend,
+          ROUND(TRY_DIVIDE((t1.last_7_day_spend - t1.prev_7_day_spend), t1.prev_7_day_spend) * 100, 2) AS growth_pct
+        FROM job_period_cost t1
+        LEFT JOIN most_recent_jobs t2 USING (workspace_id, job_id)
+        ORDER BY growth_pct DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: growth_pct
+        threshold:
+          value:
+            double_value: ${var.job_growth_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # Job Failure Rate High (JOB-005)
+    # ============================================
+    job_failure_alert:
+      display_name: "Cost Alert - Job Failure Rate"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH job_runs AS (
+          SELECT
+            workspace_id,
+            job_id,
+            COUNT(*) AS total_runs,
+            SUM(CASE WHEN result_state IN ('ERROR', 'FAILED', 'TIMED_OUT') THEN 1 ELSE 0 END) AS failed_runs,
+            ROUND((1 - TRY_DIVIDE(SUM(CASE WHEN result_state IN ('ERROR', 'FAILED', 'TIMED_OUT') THEN 1 ELSE 0 END), COUNT(*))) * 100, 2) AS success_rate
+          FROM system.lakeflow.job_run_timeline
+          WHERE result_state IS NOT NULL
+            AND period_end_time >= DATE_SUB(CURRENT_DATE(), 7)
+          GROUP BY workspace_id, job_id
+          HAVING total_runs >= 5
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        )
+        SELECT
+          COALESCE(t2.name, CAST(t1.job_id AS STRING)) AS job_name,
+          t1.job_id,
+          t1.total_runs,
+          t1.failed_runs,
+          t1.success_rate
+        FROM job_runs t1
+        LEFT JOIN most_recent_jobs t2 USING (workspace_id, job_id)
+        ORDER BY success_rate ASC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: LESS_THAN
+        empty_result_state: OK
+        source:
+          name: success_rate
+        threshold:
+          value:
+            double_value: ${var.job_failure_rate_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # SQL WAREHOUSE ALERTS
+    # ============================================
+
+    # Single Warehouse High Cost (SQL-001)
+    # ============================================
+    single_warehouse_cost_alert:
+      display_name: "Cost Alert - Single Warehouse High Cost"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        SELECT
+          u.usage_metadata.warehouse_id AS warehouse_id,
+          ROUND(SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)), 2) AS daily_cost
+        FROM system.billing.usage u
+        INNER JOIN system.billing.list_prices p
+          ON u.cloud = p.cloud
+          AND u.sku_name = p.sku_name
+          AND u.usage_start_time >= p.price_start_time
+          AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+        WHERE u.usage_date = DATE_SUB(CURRENT_DATE(), 1)
+          AND u.billing_origin_product = 'SQL'
+          AND u.usage_metadata.warehouse_id IS NOT NULL
+        GROUP BY u.usage_metadata.warehouse_id
+        ORDER BY daily_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: daily_cost
+        threshold:
+          value:
+            double_value: ${var.single_warehouse_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # Warehouse 7-Day Growth (SQL-002)
+    # ============================================
+    warehouse_growth_alert:
+      display_name: "Cost Alert - Warehouse Cost Growth"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH warehouse_period_cost AS (
+          SELECT
+            u.usage_metadata.warehouse_id AS warehouse_id,
+            SUM(CASE WHEN u.usage_date BETWEEN DATE_ADD(CURRENT_DATE(), -7) AND DATE_ADD(CURRENT_DATE(), -1)
+                THEN u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0) ELSE 0 END) AS last_7_day_spend,
+            SUM(CASE WHEN u.usage_date BETWEEN DATE_ADD(CURRENT_DATE(), -14) AND DATE_ADD(CURRENT_DATE(), -8)
+                THEN u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0) ELSE 0 END) AS prev_7_day_spend
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'SQL'
+            AND u.usage_metadata.warehouse_id IS NOT NULL
+            AND u.usage_date >= DATE_ADD(CURRENT_DATE(), -14)
+          GROUP BY u.usage_metadata.warehouse_id
+          HAVING last_7_day_spend > 100
+        )
+        SELECT
+          warehouse_id,
+          ROUND(last_7_day_spend, 2) AS last_7_day_spend,
+          ROUND(prev_7_day_spend, 2) AS prev_7_day_spend,
+          ROUND(TRY_DIVIDE((last_7_day_spend - prev_7_day_spend), prev_7_day_spend) * 100, 2) AS growth_pct
+        FROM warehouse_period_cost
+        ORDER BY growth_pct DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: growth_pct
+        threshold:
+          value:
+            double_value: ${var.warehouse_growth_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # GOVERNANCE ALERTS
+    # ============================================
+
+    # Untagged Warehouse Spend (GOV-001)
+    # ============================================
+    untagged_warehouse_alert:
+      display_name: "Cost Alert - Untagged Warehouse Spend"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH warehouse_costs AS (
+          SELECT
+            u.usage_metadata.warehouse_id AS warehouse_id,
+            FIRST(u.custom_tags) AS tags,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'SQL'
+            AND u.usage_metadata.warehouse_id IS NOT NULL
+            AND u.usage_date >= DATE_SUB(CURRENT_DATE(), 7)
+          GROUP BY u.usage_metadata.warehouse_id
+        )
+        SELECT
+          warehouse_id,
+          ROUND(list_cost, 2) AS list_cost
+        FROM warehouse_costs
+        WHERE tags IS NULL OR CARDINALITY(tags) = 0
+        ORDER BY list_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: list_cost
+        threshold:
+          value:
+            double_value: ${var.untagged_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # WASTE / EFFICIENCY ALERTS
+    # ============================================
+
+    # Cost of Failed/Cancelled Job Runs (JOB-006)
+    # Complements job_failure_alert (which only flags success RATE)
+    # by surfacing the actual $ burned on runs that did not succeed.
+    # ============================================
+    failed_run_cost_alert:
+      display_name: "Cost Alert - Failed Run Spend"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH run_state AS (
+          -- Terminal state per run (job_run_timeline has one row per state change)
+          SELECT
+            workspace_id,
+            job_id,
+            run_id,
+            MAX_BY(result_state, period_end_time) AS final_state
+          FROM system.lakeflow.job_run_timeline
+          WHERE result_state IS NOT NULL
+            AND period_end_time >= DATE_SUB(CURRENT_DATE(), 7)
+          GROUP BY workspace_id, job_id, run_id
+        ),
+        run_cost AS (
+          SELECT
+            u.workspace_id,
+            u.usage_metadata.job_id AS job_id,
+            u.usage_metadata.job_run_id AS run_id,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'JOBS'
+            AND u.usage_metadata.job_id IS NOT NULL
+            AND u.usage_metadata.job_run_id IS NOT NULL
+            AND u.usage_date >= DATE_SUB(CURRENT_DATE(), 8)
+          GROUP BY u.workspace_id, u.usage_metadata.job_id, u.usage_metadata.job_run_id
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        ),
+        failed_cost_per_job AS (
+          SELECT
+            c.workspace_id,
+            c.job_id,
+            COUNT(*) AS failed_runs,
+            SUM(c.list_cost) AS failed_cost
+          FROM run_cost c
+          INNER JOIN run_state s USING (workspace_id, job_id, run_id)
+          WHERE s.final_state IN ('ERROR', 'FAILED', 'TIMED_OUT', 'CANCELED')
+          GROUP BY c.workspace_id, c.job_id
+        )
+        SELECT
+          COALESCE(j.name, CAST(f.job_id AS STRING)) AS job_name,
+          f.job_id,
+          f.failed_runs,
+          ROUND(f.failed_cost, 2) AS failed_cost
+        FROM failed_cost_per_job f
+        LEFT JOIN most_recent_jobs j USING (workspace_id, job_id)
+        ORDER BY failed_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: failed_cost
+        threshold:
+          value:
+            double_value: ${var.failed_job_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # Jobs Running on All-Purpose Clusters (JOB-007)
+    # All-purpose compute bills at ~2x the jobs-compute SKU. Jobs with a
+    # job_id billed under ALL_PURPOSE are running on interactive clusters
+    # and should be moved to job clusters - a direct, fixable saving.
+    # (Inverse of interactive_cost_alert, which isolates job_id IS NULL.)
+    # ============================================
+    jobs_on_all_purpose_alert:
+      display_name: "Cost Alert - Jobs on All-Purpose Clusters"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH ap_job_cost AS (
+          SELECT
+            u.workspace_id,
+            u.usage_metadata.job_id AS job_id,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'ALL_PURPOSE'
+            AND u.usage_metadata.job_id IS NOT NULL
+            AND u.usage_date >= DATE_SUB(CURRENT_DATE(), 30)
+          GROUP BY u.workspace_id, u.usage_metadata.job_id
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        )
+        SELECT
+          COALESCE(j.name, CAST(a.job_id AS STRING)) AS job_name,
+          a.job_id,
+          ROUND(a.list_cost, 2) AS list_cost
+        FROM ap_job_cost a
+        LEFT JOIN most_recent_jobs j USING (workspace_id, job_id)
+        ORDER BY list_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: list_cost
+        threshold:
+          value:
+            double_value: ${var.all_purpose_job_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # ============================================
+    # BUDGET PACING ALERT
+    # ============================================
+
+    # Month-to-Date Run-Rate vs Budget (BUDGET-001)
+    # Projects month-end spend from completed-day run-rate and fires when
+    # the trajectory exceeds the monthly budget - early warning, not autopsy.
+    # ============================================
+    budget_pacing_alert:
+      display_name: "Cost Alert - Budget Pacing"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH mtd AS (
+          SELECT
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS mtd_cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.usage_date >= DATE_TRUNC('MONTH', CURRENT_DATE())
+            AND u.usage_date < CURRENT_DATE()
+        )
+        SELECT
+          ROUND(mtd_cost, 2) AS mtd_cost,
+          DAY(CURRENT_DATE()) - 1 AS days_elapsed,
+          DAY(LAST_DAY(CURRENT_DATE())) AS days_in_month,
+          ROUND(
+            mtd_cost / NULLIF(DAY(CURRENT_DATE()) - 1, 0) * DAY(LAST_DAY(CURRENT_DATE())),
+            2
+          ) AS projected_month_end_cost
+        FROM mtd
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: projected_month_end_cost
+        threshold:
+          value:
+            double_value: ${var.monthly_budget_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+
+    # Untagged Job Spend (GOV-002)
+    # ============================================
+    untagged_job_alert:
+      display_name: "Cost Alert - Untagged Job Spend"
+      custom_summary: *alert_subject
+      custom_description: *alert_email_body
+
+      query_text: |
+        WITH job_costs AS (
+          SELECT
+            u.workspace_id,
+            u.usage_metadata.job_id AS job_id,
+            FIRST(u.custom_tags) AS tags,
+            SUM(u.usage_quantity * COALESCE(p.pricing.effective_list.default, p.pricing.default, 0)) AS list_cost
+          FROM system.billing.usage u
+          INNER JOIN system.billing.list_prices p
+            ON u.cloud = p.cloud
+            AND u.sku_name = p.sku_name
+            AND u.usage_start_time >= p.price_start_time
+            AND (p.price_end_time IS NULL OR u.usage_end_time < p.price_end_time)
+          WHERE u.billing_origin_product = 'JOBS'
+            AND u.usage_metadata.job_id IS NOT NULL
+            AND u.usage_date >= DATE_SUB(CURRENT_DATE(), 7)
+          GROUP BY u.workspace_id, u.usage_metadata.job_id
+        ),
+        most_recent_jobs AS (
+          SELECT *, ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
+          FROM system.lakeflow.jobs QUALIFY rn = 1
+        )
+        SELECT
+          COALESCE(t2.name, CAST(t1.job_id AS STRING)) AS job_name,
+          t1.job_id,
+          ROUND(t1.list_cost, 2) AS list_cost
+        FROM job_costs t1
+        LEFT JOIN most_recent_jobs t2 USING (workspace_id, job_id)
+        WHERE t1.tags IS NULL OR CARDINALITY(t1.tags) = 0
+        ORDER BY list_cost DESC
+        LIMIT 1
+
+      warehouse_id: ${var.warehouse_id}
+
+      evaluation:
+        comparison_operator: GREATER_THAN
+        empty_result_state: OK
+        source:
+          name: list_cost
+        threshold:
+          value:
+            double_value: ${var.untagged_cost_threshold}
+        notification:
+          notify_on_ok: false
+          retrigger_seconds: 0
+          subscriptions:
+            - user_email: ${var.alert_emails}
+
+      schedule:
+        quartz_cron_schedule: "0 0 14 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED

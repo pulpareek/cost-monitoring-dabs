@@ -1,0 +1,175 @@
+# This is a Databricks asset bundle definition for cost-monitoring-dabs.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: cost-monitoring-dabs
+  uuid: 0c7884e2-206d-4095-956f-e6b31eaaf9f2
+
+include:
+  - resources/*.yml
+  - resources/*/*.yml
+
+# Variable declarations. These variables are assigned in the dev/prod targets below.
+variables:
+  warehouse_id:
+    description: The SQL warehouse ID for running monitoring queries
+  alert_emails:
+    description: Email addresses for cost alerts (comma-separated)
+
+  # ============================================
+  # Daily Cost Thresholds (COST-001 to COST-007)
+  # ============================================
+  ai_daily_cost_threshold:
+    description: Daily cost threshold for AI/Model Serving ($)
+    default: 100
+  job_daily_cost_threshold:
+    description: Daily cost threshold for Job compute ($)
+    default: 200
+  warehouse_daily_cost_threshold:
+    description: Daily cost threshold for SQL warehouses ($)
+    default: 150
+  serverless_daily_cost_threshold:
+    description: Daily cost threshold for serverless workloads ($)
+    default: 300
+  dlt_daily_cost_threshold:
+    description: Daily cost threshold for DLT pipelines ($)
+    default: 200
+  interactive_daily_cost_threshold:
+    description: Daily cost threshold for interactive/all-purpose clusters ($)
+    default: 500
+  total_daily_cost_threshold:
+    description: Daily cost threshold for total platform costs ($)
+    default: 1000
+
+  # ============================================
+  # Growth Detection Thresholds (GROWTH-001 to GROWTH-004)
+  # ============================================
+  wow_growth_threshold:
+    description: Week-over-week growth threshold (%)
+    default: 25
+  monthly_growth_threshold:
+    description: 30-day rolling growth threshold (%)
+    default: 30
+  anomaly_min_cost:
+    description: Minimum cost to trigger anomaly alerts ($)
+    default: 50
+
+  # ============================================
+  # Job Alert Thresholds (JOB-001 to JOB-007)
+  # ============================================
+  expensive_job_threshold:
+    description: Threshold for expensive job alert - 30 day cost ($)
+    default: 5000
+  expensive_job_run_threshold:
+    description: Threshold for single expensive job run ($)
+    default: 500
+  job_growth_threshold:
+    description: Job 7-day cost growth threshold (%)
+    default: 50
+  job_failure_rate_threshold:
+    description: Job failure rate alert threshold (% success required)
+    default: 80
+  failed_job_cost_threshold:
+    description: Cost of failed job runs to trigger alert ($)
+    default: 100
+  all_purpose_job_cost_threshold:
+    description: 30-day cost of a job running on all-purpose clusters to trigger alert ($)
+    default: 200
+  monthly_budget_threshold:
+    description: Monthly platform budget - alerts when projected month-end spend exceeds this ($)
+    default: 50000
+
+  # ============================================
+  # SQL Warehouse Thresholds (SQL-001 to SQL-005)
+  # ============================================
+  single_warehouse_cost_threshold:
+    description: Single warehouse daily cost threshold ($)
+    default: 500
+  warehouse_growth_threshold:
+    description: Warehouse 7-day growth threshold (%)
+    default: 30
+
+  # ============================================
+  # Governance Thresholds (GOV-001 to GOV-005)
+  # ============================================
+  untagged_cost_threshold:
+    description: Untagged resource cost threshold ($)
+    default: 100
+
+targets:
+  dev:
+    # The default target uses 'mode: development' to create a development copy.
+    # - Deployed resources get prefixed with '[dev my_user_name]'
+    # - Any job schedules and triggers are paused by default.
+    # See also https://docs.databricks.com/dev-tools/bundles/deployment-modes.html.
+    mode: development
+    default: true
+    # Workspace host is supplied by your Databricks CLI profile:
+    #   databricks bundle deploy -t dev -p <your-profile>
+    variables:
+      warehouse_id: "<your-sql-warehouse-id>"
+      alert_emails: "you@example.com"
+      # Dev thresholds (lower for testing)
+      # Daily Cost
+      ai_daily_cost_threshold: 50
+      job_daily_cost_threshold: 100
+      warehouse_daily_cost_threshold: 75
+      serverless_daily_cost_threshold: 150
+      dlt_daily_cost_threshold: 100
+      interactive_daily_cost_threshold: 250
+      total_daily_cost_threshold: 500
+      # Growth Detection
+      wow_growth_threshold: 30
+      monthly_growth_threshold: 40
+      anomaly_min_cost: 25
+      # Job Alerts
+      expensive_job_threshold: 1000
+      expensive_job_run_threshold: 100
+      job_growth_threshold: 50
+      job_failure_rate_threshold: 70
+      failed_job_cost_threshold: 50
+      all_purpose_job_cost_threshold: 100
+      monthly_budget_threshold: 10000
+      # SQL Warehouse
+      single_warehouse_cost_threshold: 200
+      warehouse_growth_threshold: 30
+      # Governance
+      untagged_cost_threshold: 50
+
+  prod:
+    mode: production
+    workspace:
+      # Host is supplied by your Databricks CLI profile (databricks bundle deploy -t prod -p <your-profile>).
+      # Deploy under the current user so there is only a single copy.
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      warehouse_id: "<your-sql-warehouse-id>"
+      alert_emails: "you@example.com"
+      # Prod thresholds
+      # Daily Cost
+      ai_daily_cost_threshold: 500
+      job_daily_cost_threshold: 1000
+      warehouse_daily_cost_threshold: 800
+      serverless_daily_cost_threshold: 1500
+      dlt_daily_cost_threshold: 500
+      interactive_daily_cost_threshold: 1000
+      total_daily_cost_threshold: 5000
+      # Growth Detection
+      wow_growth_threshold: 25
+      monthly_growth_threshold: 30
+      anomaly_min_cost: 50
+      # Job Alerts
+      expensive_job_threshold: 5000
+      expensive_job_run_threshold: 500
+      job_growth_threshold: 50
+      job_failure_rate_threshold: 80
+      failed_job_cost_threshold: 100
+      all_purpose_job_cost_threshold: 500
+      monthly_budget_threshold: 100000
+      # SQL Warehouse
+      single_warehouse_cost_threshold: 500
+      warehouse_growth_threshold: 30
+      # Governance
+      untagged_cost_threshold: 100
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE
